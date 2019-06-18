@@ -317,7 +317,8 @@ namespace MegumiWrapped {
 		static_assert(para_::DM == N && para::DM == M && para_::DN == N_, "InvalidOperation.");
 		for (int i = 0; i < M; ++i) {
 			for (int j = 0; j < N; ++j) {
-				for (int k = 0; k < N_; ++k) src->value[i][k] += para1->value[i][j] * para2->value[j][k];
+				typename para::value_type p1 = para1->value[i][j];
+				for (int k = 0; k < N_; ++k) src->value[i][k] += p1 * para2->value[j][k];
 			}
 		}
 	}
@@ -330,10 +331,13 @@ namespace MegumiWrapped {
 		memset(src->value, 0, sizeof(src->value));
 		for (int i = 0; i < M; ++i) {
 			for (int j = 0; j < N; ++j) {
+				typename para::value_type p1 = para1->value[i][j];
+				typename para::value_type ptg1 = para1->temp_grad_value[i][j];
 				for (int k = 0; k < N_; ++k) {
-					para1->temp_grad_value[i][j] += src->temp_grad_value[i][k] * para2->value[j][k];
-					para2->temp_grad_value[j][k] += para1->value[i][j] * src->temp_grad_value[i][k];
+					ptg1 += src->temp_grad_value[i][k] * para2->value[j][k];
+					para2->temp_grad_value[j][k] += p1 * src->temp_grad_value[i][k];
 				}
+				para1->temp_grad_value[i][j] = ptg1;
 			}
 		}
 		para1->BackProp();
@@ -562,14 +566,17 @@ namespace MegumiWrapped {
 				para2->Output();
 				memset(src->value, 0, sizeof(src->value));
 				for (int channel = 0; channel < C; ++channel) {
+					typename para::value_type *p1 = para1->value[channel];
 					for (int channel_ = 0; channel_ < CC; ++channel_) {
 						int channel__ = channel * CC + channel_;
+						typename para_::value_type *p2 = para2->value[channel__];
+						typename return_type::value_type *s = src->value[channel_];
 						for (int i = 0; i < M*N; ++i) {
 							for (int ii = 0; ii < MM * NN; ++ii) {
 								if (~conv_map.index[ii][i]) {
-									src->value[channel_][i] +=
-										para1->value[channel][conv_map.index[ii][i]] * 
-										para2->value[channel__][ii];
+									s[i] +=
+										p1[conv_map.index[ii][i]] * 
+										p2[ii];
 								}
 							}
 						}
@@ -579,15 +586,20 @@ namespace MegumiWrapped {
 
 			static void gradient(return_type* src, para* para1, para_* para2) {
 				for (int channel = 0; channel < C; ++channel) {
+					typename para::value_type *p1 = para1->value[channel];
+					typename para::value_type *ptg1 = para1->temp_grad_value[channel];
 					for (int channel_ = 0; channel_ < CC; ++channel_) {
 						int channel__ = channel * CC + channel_;
+						typename para_::value_type *p2 = para2->value[channel__];
+						typename para_::value_type *ptg2 = para2->temp_grad_value[channel__];
+						typename return_type::value_type *stg = src->temp_grad_value[channel_];
 						for (int i = 0; i < M*N; ++i) {
 							for (int ii = 0; ii < MM * NN; ++ii) {
 								if (~conv_map.index[ii][i]) {
-									para1->temp_grad_value[channel][conv_map.index[ii][i]] +=
-										src->temp_grad_value[channel_][i] * para2->value[channel__][ii];
-									para2->temp_grad_value[channel__][ii] +=
-										src->temp_grad_value[channel_][i] * para1->value[channel][conv_map.index[ii][i]];
+									ptg1[conv_map.index[ii][i]] +=
+										stg[i] * p2[ii];
+									ptg2[ii] +=
+										stg[i] * p1[conv_map.index[ii][i]];
 								}
 							}
 						}

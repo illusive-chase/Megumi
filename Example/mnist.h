@@ -1,6 +1,7 @@
 #pragma once
 #include "..\NN.h"
 #include <cstdio>
+#include <ctime>
 using namespace Megumi;
 using namespace std;
 
@@ -127,12 +128,14 @@ int main() {
 	auto loss = cross_entropy(y, y_);
 	auto accuracy = argmax(y) == argmax(y_);
 
-	for (int i = 1; i <= 5; ++i) {
+	clock_t cl = clock();
+	for (int i = 1; i <= 1; ++i) {
 		cout << i << endl;
 		nn.train(loss, 5, 20, SGDOptimizer(100, 5e-3), FeedDict(0, 1000) = { x = g_train_data,y = g_train_label });
 		nn.test(accuracy, FeedDict(0, 1000) = { x = g_train_data,y = g_train_label });
 		nn.test(accuracy, FeedDict(59500, 60000) = { x = g_train_data,y = g_train_label });
 	}
+	printf("%d\n", int(clock() - cl));
 	system("pause");
 	release();
 }
