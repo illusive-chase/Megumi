@@ -22,18 +22,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+
+
+#define import_all
+#include <top_element/SImport.h>
+
 #include "src/node.h"
 using namespace megumi;
-int main() {
-	
+
+void System::Setup() {
+	stage.addConsole();
 	node<5, 2> x = { 1,1,1,2,1,3,1,4,1,5 };
 	node<5, 1> y = { 96,204,297,403,501 };
-	node<2, 1> theta = { 0.0f,99.9f };
+	node<2, 1> theta = { 0.0f,100.0f };
 	auto bias = x * theta - y;
 	auto J = transpose(bias) * bias;
-	auto s = node<1, 1>::random_node();
-	J.init();
-	J.fp();
+	auto D = partial_node(J, theta);
+	output o = D.value();
+	o.run();
 	bias.print("bias");
 	J.print("J");
+	D.print("D");
+	system("pause");
 }

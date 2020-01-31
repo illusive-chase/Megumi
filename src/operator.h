@@ -40,46 +40,49 @@ namespace megumi {
 
 
 		std::list<pmatrix> next, prev;
-		unsigned flag;
+		unsigned sflag;
 		functor cal_val, cal_dval;
 		unsigned M, N;
 		scalar* val;
 		scalar* dval;
 
 
-		matrix(unsigned M, unsigned N) :flag(0), cal_val(nullptr), cal_dval(nullptr),
-			M(M), N(N), val(new scalar[M * N]), dval(new scalar[M * N]) {}
+		matrix(unsigned M, unsigned N) : sflag(0), cal_val(nullptr), cal_dval(nullptr),
+			M(M), N(N), val(new scalar[M * N]()), dval(nullptr) {}
 
 		template<unsigned CM, unsigned CN>
-		matrix(scalar(&arr)[CM][CN]) : flag(0), cal_val(nullptr), cal_dval(nullptr),
-			M(CM), N(CN), val(&arr), dval(new scalar[CM * CN]) {}
+		matrix(scalar(&arr)[CM][CN]) : sflag(0), cal_val(nullptr), cal_dval(nullptr),
+			M(CM), N(CN), val(&arr), dval(nullptr) {}
 
 		template<typename F>
-		matrix(unsigned M, unsigned N, F) : flag(0), cal_val(F::calculate), cal_dval(F::derivative),
-			M(M), N(N), val(new scalar[M * N]), dval(new scalar[M * N]) {}
+		matrix(unsigned M, unsigned N, F) : sflag(0), cal_val(F::calculate), cal_dval(F::derivative),
+			M(M), N(N), val(new scalar[M * N]()), dval(nullptr) {}
 
 		matrix(const matrix&) = delete;
 
 		void reset() {
-			if (cal_val) memset(val, 0, M * N * sizeof(scalar));
-			if (cal_dval) memset(dval, 0, M * N * sizeof(scalar));
-			flag = 0;
-			for (pmatrix& p : next) p->reset();
-		}
-
-		void calculate() {
-			if (!flag) {
-				for (pmatrix& p : next) p->calculate();
-				if (cal_val) cal_val(M, N, val, dval, next);
-				flag++;
+			if (sflag) {
+				sflag = 0;
+				for (pmatrix& p : next) p->reset();
 			}
 		}
 
+		void calculate() {
+			if (!sflag) {
+				if (cal_val) cal_val(M, N, val, dval, next);
+				sflag++;
+			}
+		}
+
+		void active() {
+			if (!dval) dval = new scalar[M * N]();
+			for (pmatrix& p : next) if (!p->dval) p->dval = new scalar[p->M * p->N]();
+		}
+
 		void derivative() {
-			if (flag == 1) {
-				for (pmatrix& p : prev) p->derivative();
-				if (cal_dval) cal_dval(M, N, val, dval, prev);
-				flag++;
+			if (sflag == 1) {
+				if (cal_dval) cal_dval(M, N, val, dval, next);
+				sflag++;
 			}
 		}
 
@@ -136,11 +139,11 @@ namespace megumi {
 		struct reshape {
 			static void calculate(unsigned M, unsigned N, scalar* val, scalar* dval, std::list<matrix::pmatrix>& li) {
 				scalar* pa = li.front()->val;
-				memcpy_s(val, M * N * sizeof(scalar), pa, M * N * sizeof(scalar));
+				for (unsigned i = 0; i < M * N; ++i) val[i] += pa[i];
 			}
 			static void derivative(unsigned M, unsigned N, scalar* val, scalar* dval, std::list<matrix::pmatrix>& li) {
 				scalar* pa = li.front()->dval;
-				memcpy_s(pa, M * N * sizeof(scalar), dval, M * N * sizeof(scalar));
+				for (unsigned i = 0; i < M * N; ++i) pa[i] += dval[i];
 			}
 		};
 
@@ -150,6 +153,15 @@ namespace megumi {
 				static std::default_random_engine engine(seed);
 				std::uniform_real_distribution<scalar> distribution;
 				for (unsigned i = 0; i < M * N; ++i) val[i] = distribution(engine);
+			}
+			static constexpr matrix::functor derivative = nullptr;
+		};
+
+		struct partial {
+			static void calculate(unsigned M, unsigned N, scalar* val, scalar* dval, std::list<matrix::pmatrix>& li) {
+				li.front()->dval[0] = li.front()->val[0];
+				for (matrix::pmatrix& ptr : li) ptr->derivative();
+				memcpy_s(val, M * N * sizeof(scalar), li.back()->dval, M * N * sizeof(scalar));
 			}
 			static constexpr matrix::functor derivative = nullptr;
 		};
